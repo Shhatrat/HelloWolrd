@@ -3,8 +3,6 @@ package eu.proexe.android.hellowolrd.ff;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.util.AttributeSet;
-import android.util.Log;
-import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -74,8 +72,12 @@ public class RefreshLayout extends FrameLayout {
         if(currentState == State.CLOSING){
             if (backAnimator!=null )backAnimator.cancel();
         }
+        if(currentState==State.REFRESHING_BY_HAND
+                || currentState==State.REFRESHING
+                || currentState==State.START_REFRESHING)
+            return;
 
-        currentState = State.START_REFRESHING;
+        setCurrentState(State.START_REFRESHING);
         startAnimator = ValueAnimator.ofFloat(0, pullHeight);
         startAnimator.setDuration(BACK_TOP_DUR);
         startAnimator.addUpdateListener(animation -> {
@@ -86,8 +88,16 @@ public class RefreshLayout extends FrameLayout {
             }
             mHeader.getLayoutParams().height = (int) val;
             mHeader.requestLayout();
+            if(val == pullHeight)
+                setCurrentState(State.REFRESHING);
         });
         startAnimator.start();
+    }
+
+    public void setCurrentState(State currentState) {
+        this.currentState = currentState;
+        if(mHeader!=null)
+        mHeader.setCurrentState(currentState);
     }
 
     public void stopRefreshing(){
@@ -96,7 +106,7 @@ public class RefreshLayout extends FrameLayout {
         }else if(currentState == State.START_REFRESHING_BY_HAND){
             return;
         }
-        currentState = State.CLOSING;
+        setCurrentState(State.CLOSING);
         backAnimator = ValueAnimator.ofFloat(childView.getTranslationY(), 0);
         float height = childView.getTranslationY();
         backAnimator.addUpdateListener(animation -> {
@@ -107,7 +117,8 @@ public class RefreshLayout extends FrameLayout {
             }
             mHeader.getLayoutParams().height = (int) val;
             mHeader.requestLayout();
-            currentState = State.INIT;
+            if(val == 0.0f)
+                setCurrentState(State.INIT);
         });
         backAnimator.setDuration((long) (height * BACK_TOP_DUR / pullHeight));
         backAnimator.start();
@@ -119,7 +130,7 @@ public class RefreshLayout extends FrameLayout {
         }else if(currentState == State.START_REFRESHING_BY_HAND) {
             return;
         }
-        currentState = State.CLOSING;
+        setCurrentState(State.CLOSING);
         float height = childView.getTranslationY();
         backImmediatelyAnimator = ValueAnimator.ofFloat(height, 0);
         backImmediatelyAnimator.addUpdateListener(animation -> {
@@ -130,7 +141,7 @@ public class RefreshLayout extends FrameLayout {
             }
             mHeader.getLayoutParams().height = (int) val;
             mHeader.requestLayout();
-            currentState = State.INIT;
+            setCurrentState(State.INIT);
         });
         backImmediatelyAnimator.setDuration(0);
         backImmediatelyAnimator.start();
@@ -138,7 +149,7 @@ public class RefreshLayout extends FrameLayout {
     }
 
     private void init(Context context){
-        currentState = State.INIT;
+        setCurrentState(State.INIT);
         pullHeight = Util.dpToPx(context, 100);
         this.post(() -> {
             childView = getChildAt(0);
@@ -151,7 +162,6 @@ public class RefreshLayout extends FrameLayout {
         LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0);
         params.gravity = Gravity.TOP;
         mHeader.setLayoutParams(params);
-//        mHeader.setOnDrawListener(onDrawListener);
         super.addView(mHeader);
         setUpChildAnimation();
     }
@@ -217,11 +227,10 @@ public class RefreshLayout extends FrameLayout {
         if (currentState == State.REFRESHING || currentState == State.REFRESHING_BY_HAND) {
             return super.onTouchEvent(event);
         }
-        mHeader.currentTouchEvent(event);
         switch (event.getAction()) {
             case MotionEvent.ACTION_MOVE:
                 mTouchCurY = event.getY();
-                currentState = State.START_REFRESHING_BY_HAND;
+                setCurrentState(State.START_REFRESHING_BY_HAND);
                 float dy = mTouchCurY - mTouchStartY;
                 dy = Math.min(pullHeight * 2, dy);
                 dy = Math.max(0, dy);
@@ -242,14 +251,14 @@ public class RefreshLayout extends FrameLayout {
                     if (childView.getTranslationY() >= pullHeight) {
                         mUpBackAnimator.start();
 //                        mHeader.releaseDrag();
-                        currentState = State.REFRESHING_BY_HAND;
+                        setCurrentState(State.REFRESHING_BY_HAND);
                         if(onStartRefreshingListener!=null){
                             onStartRefreshingListener.onStartRefreshing();
                         }
 
                     } else {
-                        currentState = State.CLOSING;
-                        float height = childView.getTranslationY();
+                        setCurrentState(State.CLOSING);
+                         float height = childView.getTranslationY();
                         ValueAnimator backTopAni = ValueAnimator.ofFloat(height, 0);
                         backTopAni.addUpdateListener(animation -> {
                             float val = (float) animation.getAnimatedValue();
@@ -259,7 +268,7 @@ public class RefreshLayout extends FrameLayout {
                             }
                             mHeader.getLayoutParams().height = (int) val;
                             mHeader.requestLayout();
-                            currentState = State.INIT;
+                            setCurrentState(State.INIT);
                         });
                         backTopAni.setDuration((long) (height * BACK_TOP_DUR / pullHeight));
                         backTopAni.start();
