@@ -2,6 +2,7 @@ package eu.proexe.android.hellowolrd.ff;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.os.Handler;
 import android.util.AttributeSet;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -24,12 +25,14 @@ public class RefreshLayout extends FrameLayout {
         START_REFRESHING,
         REFRESHING_BY_HAND,
         REFRESHING,
+        WAIT_FOR_CLOSE,
         CLOSING
     }
 
     private State currentState = State.INIT;
     private static final long BACK_TOP_DUR = 600;
     private static final long REL_DRAG_DUR = 200;
+    private static final long WAIT_FOR_CLOSE_DUR = 1000;
 
     private float pullHeight;
 
@@ -67,10 +70,14 @@ public class RefreshLayout extends FrameLayout {
     ValueAnimator startAnimator;
     ValueAnimator backAnimator;
     ValueAnimator backImmediatelyAnimator;
+    Handler waitForCloseHandler;
 
     public void startRefreshing(){
         if(currentState == State.CLOSING){
             if (backAnimator!=null )backAnimator.cancel();
+        }
+        if(currentState == State.WAIT_FOR_CLOSE){
+            waitForCloseHandler.removeCallbacksAndMessages(null);
         }
         if(currentState==State.REFRESHING_BY_HAND
                 || currentState==State.REFRESHING
@@ -103,6 +110,15 @@ public class RefreshLayout extends FrameLayout {
     public void stopRefreshing(){
         if(currentState == State.START_REFRESHING) {
             startAnimator.cancel();
+        }
+        setCurrentState(State.WAIT_FOR_CLOSE);
+        waitForCloseHandler = new Handler();
+        waitForCloseHandler.postDelayed(this::currentStopRefreshing, WAIT_FOR_CLOSE_DUR);
+    }
+
+    private void currentStopRefreshing(){
+        if(currentState == State.START_REFRESHING) {
+            startAnimator.cancel();
         }else if(currentState == State.START_REFRESHING_BY_HAND){
             return;
         }
@@ -123,7 +139,6 @@ public class RefreshLayout extends FrameLayout {
         backAnimator.setDuration((long) (height * BACK_TOP_DUR / pullHeight));
         backAnimator.start();
     }
-
     public void stopRefreshingImmediately(){
         if(currentState == State.START_REFRESHING) {
             startAnimator.cancel();
